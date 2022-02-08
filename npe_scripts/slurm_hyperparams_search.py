@@ -6,31 +6,30 @@ import string
 # To match the performance of relative_position_bias we need to create a batch size of 9216 (max tokens) * 8 (gpus)
 # (total of 73728 tokens\loss steps)
 if __name__ == '__main__':
-    num_of_gpus = 8
-    conda_env = "e3po10"
+    num_of_gpus = 2
+    conda_env = "npe"
 
-    #experiment = "npe-" + namegenerator.gen(n=2) + "-position_probe-gpt-3090-depth-exp"
-    experiment = "npe-wiki103-vanilla"
+    experiment = "dpp-" + namegenerator.gen(n=2) + "-gpt-wiki103-depth-exp"
+    #experiment = "lm-baevski-wiki103-512-no-token-positional-embeddings"
+    #experiment = "lm-gpt-wiki103-64"
+
     baseline = "baseline" in experiment
-    slurm_out_dir = r"/home/olab/adi/experiments/e3po/slurm_scripts/"
+    slurm_out_dir = r"/home/olab/adi/experiments/npe/slurm_scripts/"
 
     if baseline:
         slurm_out_dir += "baselines/"
     slurm_output_dir = os.path.join(slurm_out_dir, experiment)
 
     hyperparams = {
-        #'e3po-start': [0.25, 2],
-        #'e3po-ratio': [2],
         'no-token-positional-embeddings': [True],
         #'tokens-per-sample': [64, 128, 256, 512, 1024, 2040],
         'tokens-per-sample': [64],
-        #'arch': ['transformer_lm_gpt', 'transformer_lm_gpt2_2', 'transformer_lm_gpt2_4', 'transformer_lm_gpt2_6']
-
+        'arch': ['transformer_lm_gpt', 'transformer_lm_gpt_2', 'transformer_lm_gpt_4', 'transformer_lm_gpt_6']
         #'arch': ['transformer_lm_gpt']
-        'arch': ['transformer_lm_wiki103']
+        #'arch': ['transformer_lm_wiki103']
     }
 
-    is_position_probe_exp = "position_probe" in experiment or "position-probe" in experiment
+    is_position_probe_exp = "dpp-" in experiment or "-dpp" in experiment
     #max_updates = 286000 if not is_position_probe_exp else 100000
     max_updates = 286000
     #time = 5000 if not is_position_probe_exp else 1440
@@ -43,18 +42,16 @@ if __name__ == '__main__':
                      " --partition=killable --time="+str(time)+" --signal=USR1@120 --nodes=1" +\
                      " --ntasks=1 --mem=50000 --cpus-per-task=4 "
 
-    slurm_template += " --exclude=n-101,n-201 " #,n-301,n-350,n-351 "
     if "3090" in experiment:
         slurm_template += f' --constraint="geforce_rtx_3090" '
     elif "v100" in experiment:
         slurm_template += f' --constraint="tesla_v100" '
     elif "quadro" in experiment:
         slurm_template += f' --constraint="quadro_rtx_8000" '
-
-
-    if "a100" in experiment:
-        num_of_gpus = 2 if "fp32" not in experiment else 4
+    elif "a100" in experiment:
         slurm_template += " --nodelist=n-401 "
+    else:
+        slurm_template += " --exclude=n-401,n-101,n-201,n-351 " #,n-301,n-350, "
 
     gpu_loc = experiment.find("gpu")
     if gpu_loc > 0 and (experiment[gpu_loc+3: gpu_loc+4].isnumeric() or experiment[gpu_loc-1: gpu_loc].isnumeric()):
@@ -66,17 +63,16 @@ if __name__ == '__main__':
 
     slurm_template += os.path.join(slurm_output_dir, hp_template)
 
-    save_dir = os.path.join("/home/olab/adi/experiments/e3po/")
+    save_dir = os.path.join("/home/olab/adi/experiments/npe/")
     save_dir = os.path.join(save_dir, experiment)
     save_dir = os.path.join(save_dir, hp_template)
-    # "--task language_modeling /home/olab/adi/git/e3po/fairseq_cli/data-bin/wikitext-103 " \
     python_command_template_params = "/home/olab/adi/miniconda3/envs/"+conda_env+"/bin/python " \
-                                     "/home/olab/adi/git/e3po/fairseq_cli/train.py " \
-                                     "--task language_modeling  /home/olab/adi/git/fairseq-2/data-bin/wikitext-103 " \
+                                     "/home/olab/adi/git/npe/fairseq_cli/train.py " \
+                                     "--task language_modeling  /home/olab/adi/git/npe/data-bin/wikitext-103 " \
                                      "--seed 1 --sample-break-mode none --warmup-init-lr 1e-07 " \
                                      "--skip-invalid-size-inputs-valid-test --ddp-backend=legacy_ddp " \
                                      "--keep-best-checkpoints 5 --max-update "+str(max_updates) +\
-                                     " --required-batch-size-multiple 1 --wandb-project e3po "
+                                     " --required-batch-size-multiple 1 --wandb-project npe "
 
     if "gpt" in experiment:
         max_tokens = 2048
@@ -93,15 +89,16 @@ if __name__ == '__main__':
                                           " --stop-min-lr 1e-09 --optimizer nag --min-lr 0.0001 --clip-norm 0.1 "
 
     # set loss function
-    if "position_probe" in experiment or "position-probe":
+    if is_position_probe_exp:
         if "gpt" in experiment:
             python_command_template_params += " --criterion position_probe_cross_entropy "
         else:
             python_command_template_params += " --criterion position_probe_adaptive_loss "
-    elif "gpt" not in experiment:
-        python_command_template_params += " --criterion adaptive_loss "
-    else:
+    elif "gpt" in experiment:
         python_command_template_params += " --criterion cross_entropy "
+    else:
+        python_command_template_params += " --criterion adaptive_loss "
+
 
     if "a100" in experiment:
         python_command_template_params += " --update-freq 1 --max-tokens " + str((max_tokens*2)*num_of_gpus) + " "
@@ -113,12 +110,6 @@ if __name__ == '__main__':
 
     if "alibi" in experiment:
         python_command_template_params += " --relative-bias-fn alibi --no-token-positional-embeddings"
-
-    elif "gaussian" in experiment:
-        python_command_template_params += " --relative-bias-fn gaussian --no-token-positional-embeddings"
-
-    elif "sanity" in experiment:
-        python_command_template_params += " --relative-bias-fn sanity --no-token-positional-embeddings"
 
     if "fp32" not in experiment:
         python_command_template_params += " --fp16 "
@@ -139,9 +130,6 @@ if __name__ == '__main__':
             full_save_dir = save_dir
             slurm_out_file = "slurm_" + hp_template
             for key in dict_:
-                if "e3po" in key and "e3po" not in experiment:
-                    continue
-
                 if type(dict_[key]) is bool:
                     if dict_[key]:
                         job_command += " --" + key + " "
