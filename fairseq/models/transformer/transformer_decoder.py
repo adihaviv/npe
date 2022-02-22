@@ -139,6 +139,35 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         if self.output_projection is None:
             self.build_output_projection(cfg, dictionary, embed_tokens)
 
+        if self.cfg.alibi:
+            maxpos = cfg.tokens_per_sample
+            attn_heads = cfg.decoder.attention_heads
+            self.all_diffs = torch.arange(maxpos)
+            self.batch_size = cfg._parent.dataset.max_tokens // maxpos
+            self.slopes = torch.Tensor(self._get_alibi_slopes(attn_heads))
+
+            #self.all_diffs.to(self.output_projection.device)
+            #self.slopes.to(self.output_projection.device)
+
+            self.alibi_bias = self.slopes.unsqueeze(1).unsqueeze(1) * self.all_diffs.unsqueeze(0).unsqueeze(
+                0).expand(attn_heads, -1, -1)
+            self.alibi_bias = self.alibi_bias.view(attn_heads, 1, maxpos)
+            self.alibi_bias = self.alibi_bias.repeat(self.batch_size, 1, 1)  # batch_size, 1, 1
+
+
+    def _get_alibi_slopes(self,n):
+        def get_powers(n, start, ratio):
+            return [start * ratio ** i for i in range(n)]
+
+        start = (2 ** (-2 ** -(math.log2(n) - 3)))
+        ratio = start
+
+        if math.log2(n).is_integer():
+            return get_powers(n, start, ratio)
+        else:
+            closest_power_of_2 = 2 ** math.floor(math.log2(n))
+            return get_powers(closest_power_of_2, start, ratio) + self._get_alibi_slopes(2 * closest_power_of_2)[0::2][:n - closest_power_of_2]
+
     def build_output_projection(self, cfg, dictionary, embed_tokens):
         if cfg.adaptive_softmax_cutoff is not None:
             self.adaptive_softmax = AdaptiveSoftmax(
@@ -322,6 +351,13 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
 
         x = self.dropout_module(x)
 
+        # Alibi changes: We move the mask construction here because its slightly more efficient.
+        if self.cfg.alibi:
+            if incremental_state is None and not full_context_alignment:
+                self_attn_mask = self.buffered_future_mask_with_bias(x)
+            else:
+                self_attn_mask = None
+
         # B x T x C -> T x B x C
         x = x.transpose(0, 1)
 
@@ -333,10 +369,11 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
         attn: Optional[Tensor] = None
         inner_states: List[Optional[Tensor]] = [x]
         for idx, layer in enumerate(self.layers):
-            if incremental_state is None and not full_context_alignment:
-                self_attn_mask = self.buffered_future_mask(x)
-            else:
-                self_attn_mask = None
+            if not self.cfg.alibi:
+                if incremental_state is None and not full_context_alignment:
+                    self_attn_mask = self.buffered_future_mask(x)
+                else:
+                    self_attn_mask = None
 
             x, layer_attn, _ = layer(
                 x,
@@ -392,11 +429,24 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             or (not self._future_mask.device == tensor.device)
             or self._future_mask.size(0) < dim
         ):
-            self._future_mask = torch.triu(
-                utils.fill_with_neg_inf(torch.zeros([dim, dim])), 1
+            self._future_mask = torch.triu(utils.fill_with_neg_inf(torch.zeros([dim, dim])), 1
             )
         self._future_mask = self._future_mask.to(tensor)
         return self._future_mask[:dim, :dim]
+
+    def buffered_future_mask_with_bias(self, tensor):
+        dim = tensor.size(1)
+        # self._future_mask.device != tensor.device is not working in TorchScript. This is a workaround.
+        if (
+            self._future_mask.size(0) == 0
+            or (not self._future_mask.device == tensor.device)
+            or self._future_mask.size(1) < dim
+        ):
+            self._future_mask = torch.triu(utils.fill_with_neg_inf(torch.zeros([dim, dim])), 1)
+            self._future_mask = self._future_mask.unsqueeze(0) + self.alibi_bias
+
+        self._future_mask = self._future_mask.to(tensor)
+        return self._future_mask[:tensor.shape[0] * self.cfg.decoder_attention_heads, :dim, :dim]
 
     def upgrade_state_dict_named(self, state_dict, name):
         """Upgrade a (possibly old) state dict for new versions of fairseq."""

@@ -169,6 +169,12 @@ class TransformerLanguageModelConfig(FairseqDataclass):
             "help": "scalar quantization noise and scalar quantization at training time"
         },
     )
+
+    alibi: bool = field(
+        default=False,
+        metadata={"help": "use alibi position bias (in the decoder)"},
+    )
+
     # config for Fully Sharded Data Parallel (FSDP) training
     min_params_to_wrap: int = field(
         default=DEFAULT_MIN_PARAMS_TO_WRAP,
@@ -439,15 +445,17 @@ def transformer_lm_gpt(args):
     base_lm_architecture(args)
 
 
-@register_model_architecture("transformer_lm", "transformer_lm_gpt2_small")
-def transformer_lm_gpt2_small(args):
-    args.decoder_embed_dim = safe_getattr(args, "decoder_embed_dim", 1024)
-    args.decoder_ffn_embed_dim = safe_getattr(args, "decoder_ffn_embed_dim", 4096)
+@register_model_architecture("transformer_lm", "transformer_lm_gpt_xl")
+def transformer_lm_gpt2_xl(args):
+    # 1.3B params
+    args.decoder_embed_dim = safe_getattr(args, "decoder_embed_dim", 2048)
+    args.decoder_ffn_embed_dim = safe_getattr(args, "decoder_ffn_embed_dim", 8192)
     args.decoder_layers = safe_getattr(args, "decoder_layers", 24)
-    args.decoder_attention_heads = safe_getattr(args, "decoder_attention_heads", 16)
+    args.decoder_attention_heads = safe_getattr(args, "decoder_attention_heads", 32)
     args.dropout = safe_getattr(args, "dropout", 0.1)
     args.attention_dropout = safe_getattr(args, "attention_dropout", 0.1)
     args.activation_fn = safe_getattr(args, "activation_fn", "gelu")
+    args.share_decoder_input_output_embed = True
     base_lm_architecture(args)
 
 
@@ -457,6 +465,18 @@ def transformer_lm_gpt2_tiny(args):
     args.decoder_ffn_embed_dim = safe_getattr(args, "decoder_ffn_embed_dim", 64)
     args.decoder_layers = safe_getattr(args, "decoder_layers", 2)
     args.decoder_attention_heads = safe_getattr(args, "decoder_attention_heads", 1)
+    args.dropout = safe_getattr(args, "dropout", 0.1)
+    args.attention_dropout = safe_getattr(args, "attention_dropout", 0.1)
+    args.activation_fn = safe_getattr(args, "activation_fn", "gelu")
+    base_lm_architecture(args)
+
+
+@register_model_architecture("transformer_lm", "transformer_lm_gpt2_small")
+def transformer_lm_gpt2_small(args):
+    args.decoder_embed_dim = safe_getattr(args, "decoder_embed_dim", 1024)
+    args.decoder_ffn_embed_dim = safe_getattr(args, "decoder_ffn_embed_dim", 4096)
+    args.decoder_layers = safe_getattr(args, "decoder_layers", 24)
+    args.decoder_attention_heads = safe_getattr(args, "decoder_attention_heads", 16)
     args.dropout = safe_getattr(args, "dropout", 0.1)
     args.attention_dropout = safe_getattr(args, "attention_dropout", 0.1)
     args.activation_fn = safe_getattr(args, "activation_fn", "gelu")
@@ -477,6 +497,7 @@ def transformer_lm_gpt2_medium(args):
 
 @register_model_architecture("transformer_lm", "transformer_lm_gpt2_big")
 def transformer_lm_gpt2_big(args):
+    #1.5B param
     args.decoder_embed_dim = safe_getattr(args, "decoder_embed_dim", 1600)
     args.decoder_ffn_embed_dim = safe_getattr(args, "decoder_ffn_embed_dim", 6400)
     args.decoder_layers = safe_getattr(args, "decoder_layers", 48)
@@ -485,7 +506,6 @@ def transformer_lm_gpt2_big(args):
     args.attention_dropout = safe_getattr(args, "attention_dropout", 0.1)
     args.activation_fn = safe_getattr(args, "activation_fn", "gelu")
     base_lm_architecture(args)
-
 
 
 @register_model_architecture("transformer_lm", "transformer_lm_gpt_2")
@@ -527,6 +547,7 @@ def base_gpt3_architecture(args):
     args.decoder_learned_pos = safe_getattr(args, "decoder_learned_pos", True)
     args.dropout = safe_getattr(args, "dropout", 0.0)
     args.attention_dropout = safe_getattr(args, "attention_dropout", 0.0)
+
     args.activation_fn = safe_getattr(args, "activation_fn", "gelu")
     args.share_decoder_input_output_embed = True
     base_lm_architecture(args)

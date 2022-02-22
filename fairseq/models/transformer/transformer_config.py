@@ -222,6 +222,15 @@ class TransformerConfig(FairseqDataclass):
         metadata={"help": "don't add an extra layernorm after the last decoder block"},
     )
 
+    alibi: bool = field(
+        default=False,
+        metadata={"help": "use alibi position bias (in the decoder)"},
+    )
+
+    tokens_per_sample: int = II("task.tokens_per_sample")
+
+
+
     # We need to make this hierarchical dataclass like the flat namespace
     # __getattr__ and __setattr__ here allow backward compatibility
     # for subclasses of Transformer(Legacy) that depend on read/write on
