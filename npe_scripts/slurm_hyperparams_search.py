@@ -9,9 +9,11 @@ if __name__ == '__main__':
     num_of_gpus = 2
     conda_env = "npe"
 
-    experiment = "dpp-" + namegenerator.gen(n=2) + "-gpt-wiki103-depth-exp"
+    #experiment = "dpp-" + namegenerator.gen(n=2) + "-gpt-wiki103-depth-exp"
     #experiment = "lm-baevski-wiki103-512-no-token-positional-embeddings"
-    #experiment = "lm-gpt-wiki103-64"
+    experiment = "lm-" + namegenerator.gen(n=2) + "-gpt_xl-pile-alibi-a100-1024-short-exp-btz32"
+
+    debug_mode = "debug" in experiment
 
     baseline = "baseline" in experiment
     slurm_out_dir = r"/home/olab/adi/experiments/npe/slurm_scripts/"
@@ -22,18 +24,22 @@ if __name__ == '__main__':
 
     hyperparams = {
         'no-token-positional-embeddings': [True],
-        #'tokens-per-sample': [64, 128, 256, 512, 1024, 2040],
-        'tokens-per-sample': [64],
-        'arch': ['transformer_lm_gpt', 'transformer_lm_gpt_2', 'transformer_lm_gpt_4', 'transformer_lm_gpt_6']
-        #'arch': ['transformer_lm_gpt']
+        'tokens-per-sample': [1024],
+        #'tokens-per-sample': [64],
+        #'arch': ['transformer_lm_gpt', 'transformer_lm_gpt_2', 'transformer_lm_gpt_4', 'transformer_lm_gpt_6']
+        'arch': ['transformer_lm_gpt_xl'],
+        'seed': [42]
         #'arch': ['transformer_lm_wiki103']
     }
 
     is_position_probe_exp = "dpp-" in experiment or "-dpp" in experiment
-    #max_updates = 286000 if not is_position_probe_exp else 100000
+    # max_updates = 286000 if not is_position_probe_exp else 100000
     max_updates = 286000
-    #time = 5000 if not is_position_probe_exp else 1440
+    # time = 5000 if not is_position_probe_exp else 1440
     time = 5000
+
+    if "short-exp" in experiment:
+        time = 2040
 
     hp_template = experiment
     slurm_template = "sbatch --job-name=" + experiment + \
@@ -66,21 +72,39 @@ if __name__ == '__main__':
     save_dir = os.path.join("/home/olab/adi/experiments/npe/")
     save_dir = os.path.join(save_dir, experiment)
     save_dir = os.path.join(save_dir, hp_template)
+
+    pile_exp = "pile" in experiment
+    dataset_path = r"/home/olab/adi/git/npe/data-bin/pile/pile_gpt2_bpe " if pile_exp else r"/home/olab/adi/git/npe/data-bin/wikitext-103 "
+
     python_command_template_params = "/home/olab/adi/miniconda3/envs/"+conda_env+"/bin/python " \
                                      "/home/olab/adi/git/npe/fairseq_cli/train.py " \
-                                     "--task language_modeling  /home/olab/adi/git/npe/data-bin/wikitext-103 " \
-                                     "--seed 1 --sample-break-mode none --warmup-init-lr 1e-07 " \
-                                     "--skip-invalid-size-inputs-valid-test --ddp-backend=legacy_ddp " \
-                                     "--keep-best-checkpoints 5 --max-update "+str(max_updates) +\
-                                     " --required-batch-size-multiple 1 --wandb-project npe "
+                                     " --task language_modeling " + dataset_path + \
+                                     " --sample-break-mode none " \
+                                     " --skip-invalid-size-inputs-valid-test --ddp-backend=legacy_ddp " \
+                                     " --keep-best-checkpoints 5 --max-update "+str(max_updates) +\
+                                     " --required-batch-size-multiple 1 --wandb-project npe " \
+    # "--warmup-init-lr 1e-07 "
+
+    if pile_exp:
+        valid_update_steps = "1000" if not debug_mode else "20"
+        python_command_template_params += " --validate-interval-updates " +valid_update_steps+ " --save-interval-updates 1000" \
+                                          " --checkpoint-activations --memory-efficient-fp16" \
+                                          #" --fp16-adam-stats --combine-valid-subsets --distributed-no-spawn
 
     if "gpt" in experiment:
-        max_tokens = 2048
-        python_command_template_params += " --dropout 0.1 " \
-                                          " --optimizer adam --adam-betas '(0.9, 0.98)' " \
-                                          " --weight-decay 0.01 --clip-norm 0.0 --lr 0.0005 " \
-                                          " --lr-scheduler inverse_sqrt --warmup-updates 4000  " \
-                                          " --sample-break-mode none "
+        max_tokens = 2048   # btz=2
+        max_tokens = 65536  # btz=64 --> Mem error
+        max_tokens = 51200  # btz=50 --> Mem error
+        max_tokens = 32768  # btz=32 --> 256
+        #max_tokens = 16384  # btz=16
+        #max_tokens = 8192   # btz=8 --> 64
+
+        python_command_template_params += " --optimizer adam --adam-betas '(0.9, 0.98)' " \
+                                          " --weight-decay 0.01 --clip-norm 0.0 " \
+                                          " --lr-scheduler polynomial_decay --total-num-update 286102" \
+                                          " --warmup-updates 375 --lr 0.0002 "
+                                          #--lr 0.0005
+
     else:
         max_tokens = 9216
         python_command_template_params += " --lr 1.0 --t-mult 2 " \
@@ -100,16 +124,17 @@ if __name__ == '__main__':
         python_command_template_params += " --criterion adaptive_loss "
 
 
-    if "a100" in experiment:
-        python_command_template_params += " --update-freq 1 --max-tokens " + str((max_tokens*2)*num_of_gpus) + " "
-    else:
-        python_command_template_params += " --update-freq " + str(8//num_of_gpus) + " --max-tokens " + str(max_tokens)
+    #if "a100" in experiment:
+        #python_command_template_params += " --update-freq 1 --max-tokens " + str((max_tokens*2)*num_of_gpus) + " "
+    #else:
+
+    python_command_template_params += " --update-freq " + str(8//num_of_gpus) + " --max-tokens " + str(max_tokens)
 
     # if "vanilla" not in experiment and "abs_pos" not in experiment:
     #    python_command_template_params += " --no-token-positional-embeddings "
 
     if "alibi" in experiment:
-        python_command_template_params += " --relative-bias-fn alibi --no-token-positional-embeddings"
+        python_command_template_params += " --alibi --no-token-positional-embeddings"
 
     if "fp32" not in experiment:
         python_command_template_params += " --fp16 "
@@ -130,6 +155,9 @@ if __name__ == '__main__':
             full_save_dir = save_dir
             slurm_out_file = "slurm_" + hp_template
             for key in dict_:
+                if key in python_command_template_params:
+                    continue
+
                 if type(dict_[key]) is bool:
                     if dict_[key]:
                         job_command += " --" + key + " "
