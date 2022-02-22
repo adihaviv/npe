@@ -1,0 +1,3 @@
+# !/bin/bash
+
+sbatch --job-name=lm-marriage-rough-gpt_xl-pile-alibi-a100-1024-short-exp-btz32 --output=/home/olab/adi/experiments/npe/slurm_scripts/lm-marriage-rough-gpt_xl-pile-alibi-a100-1024-short-exp-btz32/slurm_lm-marriage-rough-gpt_xl-pile-alibi-a100-1024-short-exp-btz32.out --error=/home/olab/adi/experiments/npe/slurm_scripts/lm-marriage-rough-gpt_xl-pile-alibi-a100-1024-short-exp-btz32/slurm_lm-marriage-rough-gpt_xl-pile-alibi-a100-1024-short-exp-btz32.err --partition=killable --time=2040 --signal=USR1@120 --nodes=1 --ntasks=1 --mem=50000 --cpus-per-task=4  --nodelist=n-401  --gpus=2 /home/olab/adi/experiments/npe/slurm_scripts/lm-marriage-rough-gpt_xl-pile-alibi-a100-1024-short-exp-btz32/lm-marriage-rough-gpt_xl-pile-alibi-a100-1024-short-exp-btz32.sh
