@@ -152,8 +152,7 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             self.alibi_bias = self.slopes.unsqueeze(1).unsqueeze(1) * self.all_diffs.unsqueeze(0).unsqueeze(
                 0).expand(attn_heads, -1, -1)
             self.alibi_bias = self.alibi_bias.view(attn_heads, 1, maxpos)
-            self.alibi_bias_batched = self.alibi_bias.repeat(self.batch_size, 1, 1)  # batch_size, 1, 1
-
+           # self.alibi_bias_batched = self.alibi_bias.repeat(self.batch_size, 1, 1)  # batch_size, 1, 1
 
     def _get_alibi_slopes(self,n):
         def get_powers(n, start, ratio):
