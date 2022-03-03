@@ -427,11 +427,6 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 self._future_mask.size(0) == 0
                 or (not self._future_mask.device == tensor.device)
                 or self._future_mask.size(1) < max_seq_len
-                or (
-                        self.cfg.alibi
-                        and self._future_mask.size(0)
-                        != (batch_size * self.args.decoder_attention_heads)
-                )
         )
 
         # self._future_mask.device != tensor.device is not working in TorchScript. This is a workaround.
@@ -440,12 +435,12 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
                 utils.fill_with_neg_inf(torch.zeros([max_seq_len, max_seq_len])), 1
             )
             if self.cfg.alibi:
-                alibi = self.alibi_bias.repeat(batch_size, 1, 1)  # batch_size, 1, 1
-                self._future_mask = self._future_mask.unsqueeze(0) + alibi
+                self._future_mask = self._future_mask.unsqueeze(0).expand(self.args.decoder_attention_heads, max_seq_len, max_seq_len).contiguous() + self.alibi_bias
         self._future_mask = self._future_mask.to(tensor)
 
         if self.cfg.alibi:
-            return self._future_mask[: batch_size * self.args.decoder_attention_heads,:cur_seq_len,:cur_seq_len,]
+            future_mask = self._future_mask[:, :cur_seq_len, :cur_seq_len]
+            return future_mask.repeat(batch_size, 1, 1)
         else:
             return self._future_mask[:cur_seq_len, :cur_seq_len]
 
@@ -461,21 +456,6 @@ class TransformerDecoderBase(FairseqIncrementalDecoder):
             )
         self._future_mask = self._future_mask.to(tensor)
         return self._future_mask[:dim, :dim]
-
-    #TODO: delete this
-    def buffered_future_mask_with_bias(self, tensor):
-        dim = tensor.size(1)
-        # self._future_mask.device != tensor.device is not working in TorchScript. This is a workaround.
-        if (
-            self._future_mask.size(0) == 0
-            or (not self._future_mask.device == tensor.device)
-            or self._future_mask.size(1) < dim
-        ):
-            self._future_mask = torch.triu(utils.fill_with_neg_inf(torch.zeros([dim, dim])), 1)
-            self._future_mask = self._future_mask.unsqueeze(0) + self.alibi_bias_batched #self.alibi_bias_batched[:, :, :dim]
-
-        self._future_mask = self._future_mask.to(tensor)
-        return self._future_mask[:tensor.shape[0] * self.cfg.decoder_attention_heads, :dim, :dim]
 
     def upgrade_state_dict_named(self, state_dict, name):
         """Upgrade a (possibly old) state dict for new versions of fairseq."""
