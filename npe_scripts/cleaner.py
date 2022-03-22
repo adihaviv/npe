@@ -31,12 +31,12 @@ def delete_wanb(path):
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--root_dir",
-                        default=r"/home/olab/adi/experiments/induction_net",
+                        default=r"/home/olab/adi/experiments/npe",
                         type=str,
                         required=False)
 
     parser.add_argument("--root_dir_wandb",
-                        default=r"/home/olab/adi/experiments/induction_net/slurm_scripts/",
+                        default=r"/home/olab/adi/experiments/npe/slurm_scripts/",
                         type=str,
                         required=False)
 

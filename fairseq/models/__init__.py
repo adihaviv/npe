@@ -50,6 +50,7 @@ __all__ = [
     "FairseqLanguageModel",
     "FairseqModel",
     "FairseqMultiModel",
+    "TransformerLanguageModelPositionProbe",
 ]
 
 
