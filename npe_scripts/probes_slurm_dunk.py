@@ -157,7 +157,7 @@ def just_do_it(args):
         sin_hyperparams['pretrained-decoder-filename'] = [args.sinusoidal_checkpoint]
         create_scripts(all_f, experiment_name, "sinusoidal", sin_hyperparams, python_command_template_params, save_dir,
                        slurm_output_dir, slurm_template)
-
+    #
     return slurm_output_dir
 
 
