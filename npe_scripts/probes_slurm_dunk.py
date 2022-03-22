@@ -106,7 +106,7 @@ def just_do_it(args):
                      " --output=" + os.path.join(slurm_output_dir, "slurm_" + experiment_name + ".out") + \
                      " --error=" + os.path.join(slurm_output_dir, "slurm_" + experiment_name + ".err") + \
                      " --partition=killable --time=" + str(args.slurm_time) + " --signal=USR1@120 --nodes=1" + \
-                     " --ntasks=1 --mem=50000 --cpus-per-task=4 --gpus=" + str(num_of_gpus) + " "
+                     " --ntasks=1 --mem=50000 --cpus-per-task=4 --gpus=" + str(num_of_gpus) + " " + experiment_name
 
     python_command_template_params = args.fairseq_train_path + " " + " " + args.data_dir + " " \
                                      " --task language_modeling_position_probe --sample-break-mode none " \
