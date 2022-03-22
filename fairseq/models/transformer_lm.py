@@ -175,6 +175,11 @@ class TransformerLanguageModelConfig(FairseqDataclass):
         metadata={"help": "use alibi position bias (in the decoder)"},
     )
 
+    debug: bool = field(
+        default=False,
+        metadata={"help": "use alibi position bias (in the decoder)"},
+    )
+
     # config for Fully Sharded Data Parallel (FSDP) training
     min_params_to_wrap: int = field(
         default=DEFAULT_MIN_PARAMS_TO_WRAP,

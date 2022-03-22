@@ -227,6 +227,11 @@ class TransformerConfig(FairseqDataclass):
         metadata={"help": "use alibi position bias (in the decoder)"},
     )
 
+    debug: bool = field(
+        default=False,
+        metadata={"help": "debug mode"},
+    )
+
     tokens_per_sample: int = II("task.tokens_per_sample")
 
 
