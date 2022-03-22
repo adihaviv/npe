@@ -15,12 +15,12 @@ import torch as t
 from npe_utils import NPE_Utils
 
 @dataclass
-class DPPCrossEntropyCriterionConfig(FairseqDataclass):
+class PPCrossEntropyCriterionConfig(FairseqDataclass):
     sentence_avg: bool = II("optimization.sentence_avg")
 
 
-@register_criterion("dpp_cross_entropy_fix", dataclass=DPPCrossEntropyCriterionConfig)
-class DPPCrossEntropyCriterion(FairseqCriterion):
+@register_criterion("dpp_cross_entropy_2", dataclass=PPCrossEntropyCriterionConfig)
+class PPCrossEntropyCriterion(FairseqCriterion):
     def __init__(self, task, sentence_avg):
         super().__init__(task)
         self.sentence_avg = sentence_avg

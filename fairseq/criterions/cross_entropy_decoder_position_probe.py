@@ -13,18 +13,25 @@ from fairseq.dataclass import FairseqDataclass
 from omegaconf import II
 import torch as t
 from npe_utils import NPE_Utils
+from dataclasses import _MISSING_TYPE, dataclass, field
 
 @dataclass
 class DPPCrossEntropyCriterionConfig(FairseqDataclass):
     sentence_avg: bool = II("optimization.sentence_avg")
 
+    dont_report_accuracy: bool = field(
+        default=False,
+        metadata={"help": "report accuracy metric"},
+    )
 
-@register_criterion("dpp_cross_entropy", dataclass=DPPCrossEntropyCriterionConfig)
+
+@register_criterion("dpp_cross_entropy_fix", dataclass=DPPCrossEntropyCriterionConfig)
 class DPPCrossEntropyCriterion(FairseqCriterion):
-    def __init__(self, task, sentence_avg):
+    def __init__(self, task, sentence_avg, dont_report_accuracy=False):
         super().__init__(task)
         self.sentence_avg = sentence_avg
-        self.positions = NPE_Utils.get_all_positions(task.target_dictionary)
+        self.positions = [i for i in range(8192)]  # We start from 5 to ignore the special tokens
+        self.report_accuracy = not dont_report_accuracy
 
     def forward(self, model, sample, reduce=True):
         """Compute the loss for the given sample.
@@ -34,6 +41,7 @@ class DPPCrossEntropyCriterion(FairseqCriterion):
         2) the sample size, which is used as the denominator for the gradient
         3) logging outputs to display while training
         """
+
         net_output = model(**sample["net_input"])
         loss, _ = self.compute_loss(model, net_output, sample, reduce=reduce)
         sample_size = (
@@ -45,23 +53,20 @@ class DPPCrossEntropyCriterion(FairseqCriterion):
             "nsentences": sample["target"].size(0),
             "sample_size": sample_size,
         }
+        if self.report_accuracy:
+            n_correct, total = self.compute_accuracy(model, net_output, sample)
+            logging_output["n_correct"] = utils.item(n_correct.data)
+            logging_output["total"] = utils.item(total.data)
+
+            # Print out some examples:
+            #lprobs, target = get_lprobs_and_target(self.positions, self.padding_idx, model, net_output, sample)
+            #outputs = [[j.item()-5 for j in [i.data for i in lprobs.view(net_output[0].shape).argmax(2)][k]] for k in range(5)]
+            #for output in outputs:
+            #    print(output)
         return loss, sample_size, logging_output
 
     def compute_loss(self, model, net_output, sample, reduce=True):
-        lprobs = model.get_normalized_probs(net_output, log_probs=True)
-        lprobs = lprobs.view(-1, lprobs.size(-1))
-
-        ##### probe hack #####
-        dim = net_output[0].shape[1]
-        assert dim <= len(self.positions)
-
-        positions = self.positions[:dim]
-        batch_size = net_output[0].shape[0]
-        sample['target'] = t.tensor(positions).expand(batch_size, dim).to(sample['target'])
-        #######################
-
-        target = model.get_targets(sample, net_output).view(-1)
-
+        lprobs, target = get_lprobs_and_target(self.positions, self.padding_idx, model, net_output, sample)
         loss = F.nll_loss(
             lprobs,
             target,
@@ -69,6 +74,15 @@ class DPPCrossEntropyCriterion(FairseqCriterion):
             reduction="sum" if reduce else "none",
         )
         return loss, loss
+
+    def compute_accuracy(self, model, net_output, sample):
+        lprobs, target = get_lprobs_and_target(self.positions, self.padding_idx, model, net_output, sample)
+        mask = target.ne(self.padding_idx)
+        n_correct = t.sum(
+            lprobs.argmax(1).masked_select(mask).eq(target.masked_select(mask))
+        )
+        total = t.sum(mask)
+        return n_correct, total
 
 
     @staticmethod
@@ -94,6 +108,22 @@ class DPPCrossEntropyCriterion(FairseqCriterion):
                 "ppl", lambda meters: utils.get_perplexity(meters["loss"].avg)
             )
 
+        total = utils.item(sum(log.get("total", 0) for log in logging_outputs))
+        if total > 0:
+            metrics.log_scalar("total", total)
+            n_correct = utils.item(
+                sum(log.get("n_correct", 0) for log in logging_outputs)
+            )
+            metrics.log_scalar("n_correct", n_correct)
+            metrics.log_derived(
+                "accuracy",
+                lambda meters: round(
+                    meters["n_correct"].sum * 100.0 / meters["total"].sum, 3
+                )
+                if meters["total"].sum > 0
+                else float("nan"),
+            )
+
     @staticmethod
     def logging_outputs_can_be_summed() -> bool:
         """
@@ -102,3 +132,27 @@ class DPPCrossEntropyCriterion(FairseqCriterion):
         to True will improves distributed training speed.
         """
         return True
+
+
+def get_lprobs_and_target(all_positions, padding_idx, model, net_output, sample):
+    lprobs = model.get_normalized_probs(net_output, log_probs=True)
+
+
+    ##### probe hack #####
+    batch_size, dim = net_output[0].shape[0:2]
+    assert dim <= len(all_positions)
+    positions = all_positions[:dim]
+    mask = sample['target'].eq(padding_idx)
+
+    # this can only happen in debug!
+    #if mask.shape[0] != batch_size:
+    #    mask = mask[0].expand(batch_size,dim)
+
+    pos_target = t.tensor(positions).expand(batch_size, dim).to(sample['target'])
+    pos_target = pos_target.masked_fill(mask, padding_idx)
+    sample['target'] = pos_target + model.decoder.dictionary.nspecial + 1
+    #######################
+
+    lprobs = lprobs.view(-1, lprobs.size(-1))
+    target = model.get_targets(sample, net_output).view(-1)
+    return lprobs, target
