@@ -101,7 +101,7 @@ def just_do_it(args):
                      " --output=" + os.path.join(slurm_output_dir, "slurm_" + experiment_name + ".out") + \
                      " --error=" + os.path.join(slurm_output_dir, "slurm_" + experiment_name + ".err") + \
                      " --partition=learnlab --time=" + str(args.slurm_time) + " --signal=USR1@120 --nodes=1" + \
-                     " --ntasks=1 --mem=50000 --cpus-per-task=4 --constraint=volta32gb --gres=gpu:" + str(num_of_gpus) + " "
+                     " --ntasks=1 --mem=50000 --cpus-per-task=4 --constraint=volta32gb --gres=gpu:" + str(num_of_gpus) + " " + slurm_output_dir + "/"
 
     python_command_template_params = args.fairseq_train_path + " " + " " + args.data_dir + " " \
                                      " --task language_modeling_position_probe --sample-break-mode none " \
@@ -167,7 +167,7 @@ def create_scripts(all_f, experiment_name, hyperparams, python_command_template_
     for dict_ in param_grid:
         job_command = python_command_template_params
         job_file_path = os.path.join(slurm_output_dir, experiment_name)
-        slurm_command = slurm_template
+        slurm_command = slurm_template + experiment_name
         full_save_dir = save_dir
         slurm_out_file = "slurm_" + experiment_name
         for key in dict_:
