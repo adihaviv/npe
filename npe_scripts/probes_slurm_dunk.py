@@ -7,14 +7,12 @@ import os
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_dir",
-                        default=r"/home/olab/adi/git/npe/data-bin/mini-pile",
-                        #default=r"/home/olab/adi/git/npe/data-bin/wikitext-103",
-                        #default=r"data-bin/pile"
+                        default=r"data-bin/pile",
                         type=str,
                         required=False)
 
     parser.add_argument("--slurm_out_dir",
-                        default=r"/home/olab/adi/experiments/npe/slurm_scripts/",
+                        default=r"slurm_scripts/",
                         type=str,
                         required=False)
 
@@ -49,23 +47,22 @@ def parse_args():
                         required=False)
 
     parser.add_argument("--npe_checkpoint",
-                        #default=r"/home/olab/adi/experiments/npe/lm-baevski-wiki103-512/lm-baevski-wiki103-512-no-token-positional-embeddings/checkpoint_best.pt",
-                        default=r"/home/olab/levyomer/temp/pile_xl.pt",
+                        default=r"npe.pt",
                         type=str,
                         required=False)
 
     parser.add_argument("--alibi_checkpoint",
-                        default=r"/home/olab/adi/experiments/e3po/alibi-e3po-baseline-influence-gap/alibi-e3po-baseline-influence-gap/checkpoint_best.pt",
+                        default=r"alibi.pt",
                         type=str,
                         required=False)
 
     parser.add_argument("--sinusoidal_checkpoint",
-                        default=r"/home/olab/adi/experiments/e3po/vanilla-e3po-baseline-8gpu-distribution-anybody/vanilla-e3po-baseline-8gpu-distribution-anybody/checkpoint_best.pt",
+                        default=r"baseline.pt",
                         type=str,
                         required=False)
 
     parser.add_argument("--learned_checkpoint",
-                        default=r"/home/olab/adi/experiments/npe/lm-abs-learned-baevski-wiki103-512/lm-abs-learned-baevski-wiki103-512/checkpoint_best.pt",
+                        default=r"learned.pt",
                         type=str,
                         required=False)
 
@@ -75,14 +72,12 @@ def parse_args():
                         required=False)
 
     parser.add_argument("--fairseq_train_path",
-                        default=r"/home/olab/adi/miniconda3/envs/npe/bin/fairseq-train",
-                        # default=r"/private/home/omerlevy/anaconda3/envs/npe/bin/fairseq-train",
+                        default=r"bin/fairseq-train",
                         type=str,
                         required=False)
 
     parser.add_argument("--save_checkpoint_dir",
-                        default=r"/home/olab/adi/experiments/npe/",
-                        # default=r"checkpoints",
+                        default=r"probe_checkpoints/",
                         type=str,
                         required=False)
 
@@ -105,8 +100,8 @@ def just_do_it(args):
     slurm_template = "sbatch --job-name=" + experiment_name + \
                      " --output=" + os.path.join(slurm_output_dir, "slurm_" + experiment_name + ".out") + \
                      " --error=" + os.path.join(slurm_output_dir, "slurm_" + experiment_name + ".err") + \
-                     " --partition=killable --time=" + str(args.slurm_time) + " --signal=USR1@120 --nodes=1" + \
-                     " --ntasks=1 --mem=50000 --cpus-per-task=4 --gpus=" + str(num_of_gpus) + " "
+                     " --partition=learnlab --time=" + str(args.slurm_time) + " --signal=USR1@120 --nodes=1" + \
+                     " --ntasks=1 --mem=50000 --cpus-per-task=4 --constraint=volta32gb --gres=gpu:" + str(num_of_gpus) + " "
 
     python_command_template_params = args.fairseq_train_path + " " + " " + args.data_dir + " " \
                                      " --task language_modeling_position_probe --sample-break-mode none " \
