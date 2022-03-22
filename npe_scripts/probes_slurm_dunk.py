@@ -149,7 +149,7 @@ def just_do_it(args):
         learned_hyperparams = hyperparams
         learned_hyperparams['decoder-learned-pos'] = [True]
         learned_hyperparams['pretrained-decoder-filename'] = [args.learned_checkpoint]
-        create_scripts(all_f, experiment_name, "learned", npe_hyperparams, python_command_template_params, save_dir,
+        create_scripts(all_f, experiment_name, "learned", learned_hyperparams, python_command_template_params, save_dir,
                        slurm_output_dir, slurm_template)
 
         # Sinusoidal
