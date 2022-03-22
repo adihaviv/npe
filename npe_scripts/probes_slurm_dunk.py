@@ -97,13 +97,9 @@ def just_do_it(args):
     hyperparams = {
         'seed': [1],
         'arch': ['transformer_lmpp_gpt3_xl'], #transformer_lmpp_wiki103
-        'probe-layer-idx': [3],
-        #'probe-layer-idx': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
-        'lr': [0.002],
-        #'lr': [0.002, 0.0002],
-        #'non-linear-probe': [True, False],
-        'non-linear-probe': [True],
-
+        'probe-layer-idx': [i for i in range(25)],
+        'lr': [0.002, 0.0002],
+        'non-linear-probe': [True, False],
     }
 
     slurm_template = "sbatch --job-name=" + experiment_name + \
