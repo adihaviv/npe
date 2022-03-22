@@ -72,7 +72,7 @@ def parse_args():
                         required=False)
 
     parser.add_argument("--fairseq_train_path",
-                        default=r"bin/fairseq-train",
+                        default=r"fairseq-train",
                         type=str,
                         required=False)
 
