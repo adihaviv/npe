@@ -131,7 +131,7 @@ def just_do_it(args):
         all_f.write("# !/bin/bash\n\n")
 
         # AliBi
-        alibi_hyperparams = hyperparams
+        alibi_hyperparams = hyperparams.copy()
         alibi_hyperparams['no-token-positional-embeddings'] = [True]
         alibi_hyperparams['alibi'] = [True]
         alibi_hyperparams['pretrained-decoder-filename'] = [args.alibi_checkpoint]
@@ -139,26 +139,26 @@ def just_do_it(args):
                        slurm_output_dir, slurm_template)
 
         # NPE
-        npe_hyperparams = hyperparams
+        npe_hyperparams = hyperparams.copy()
         npe_hyperparams['no-token-positional-embeddings'] = [True]
         npe_hyperparams['pretrained-decoder-filename'] = [args.npe_checkpoint]
         create_scripts(all_f, experiment_name, "npe", npe_hyperparams, python_command_template_params, save_dir,
                        slurm_output_dir, slurm_template)
 
         # Learned
-        learned_hyperparams = hyperparams
+        learned_hyperparams = hyperparams.copy()
         learned_hyperparams['decoder-learned-pos'] = [True]
         learned_hyperparams['pretrained-decoder-filename'] = [args.learned_checkpoint]
         create_scripts(all_f, experiment_name, "learned", learned_hyperparams, python_command_template_params, save_dir,
                        slurm_output_dir, slurm_template)
 
         # Sinusoidal
-        sin_hyperparams = hyperparams
+        sin_hyperparams = hyperparams.copy()
         sin_hyperparams['pretrained-decoder-filename'] = [args.sinusoidal_checkpoint]
         create_scripts(all_f, experiment_name, "sinusoidal", sin_hyperparams, python_command_template_params, save_dir,
                        slurm_output_dir, slurm_template)
 
-    return  slurm_output_dir
+    return slurm_output_dir
 
 
 def create_scripts(all_f, experiment_name, pos_method, hyperparams, python_command_template_params, save_dir, slurm_output_dir,
@@ -166,7 +166,7 @@ def create_scripts(all_f, experiment_name, pos_method, hyperparams, python_comma
     param_grid = ParameterGrid(hyperparams)
     for dict_ in param_grid:
         job_command = python_command_template_params
-        job_file_path = os.path.join(slurm_output_dir, experiment_name)
+        job_file_path = os.path.join(slurm_output_dir, experiment_name+"-"+pos_method)
         slurm_command = slurm_template + experiment_name
         full_save_dir = save_dir
 
