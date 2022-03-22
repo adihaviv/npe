@@ -22,7 +22,7 @@ from fairseq.modules import AdaptiveInput, CharacterTokenEmbedder
 from fairseq.utils import safe_getattr, safe_hasattr
 from omegaconf import II
 import torch.nn as nn
-from fairseq.models.transformer_lm import TransformerLanguageModel, TransformerLanguageModelConfig, base_lm_architecture, transformer_lm_big
+from fairseq.models.transformer_lm import TransformerLanguageModel, TransformerLanguageModelConfig, base_lm_architecture, transformer_lm_big, transformer_lm_gpt3_xl
 from fairseq import checkpoint_utils, models, optim, utils
 
 import logging
@@ -225,3 +225,9 @@ def transformer_lm_baevski_wiki103(args):
     args.no_decoder_final_norm = safe_getattr(args, "no_decoder_final_norm", True)
     args.tie_adaptive_proj = safe_getattr(args, "tie_adaptive_proj", True)
     transformer_lm_big(args)
+
+
+@register_model_architecture("transformer_lmpp", "transformer_lmpp_gpt3_xl")
+def transformer_lmpp_gpt3_xl(args):
+    # 1.3B params
+    transformer_lm_gpt3_xl(args)

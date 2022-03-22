@@ -43,7 +43,9 @@ class DPPCrossEntropyCriterion(FairseqCriterion):
         """
 
         net_output = model(**sample["net_input"])
-        loss, _ = self.compute_loss(model, net_output, sample, reduce=reduce)
+        lprobs, target = get_lprobs_and_target(self.positions, self.padding_idx, model, net_output, sample)
+
+        loss, _ = self.compute_loss(lprobs, target, reduce=reduce)
         sample_size = (
             sample["target"].size(0) if self.sentence_avg else sample["ntokens"]
         )
@@ -54,9 +56,12 @@ class DPPCrossEntropyCriterion(FairseqCriterion):
             "sample_size": sample_size,
         }
         if self.report_accuracy:
-            n_correct, total = self.compute_accuracy(model, net_output, sample)
+            n_correct, total = self.compute_accuracy(lprobs, target)
             logging_output["n_correct"] = utils.item(n_correct.data)
             logging_output["total"] = utils.item(total.data)
+
+            abs_diff_sum = self.compute_mean_absolute_difference(lprobs, target)
+            logging_output["abs_diff_sum"] = utils.item(abs_diff_sum.data)
 
             # Print out some examples:
             #lprobs, target = get_lprobs_and_target(self.positions, self.padding_idx, model, net_output, sample)
@@ -65,8 +70,7 @@ class DPPCrossEntropyCriterion(FairseqCriterion):
             #    print(output)
         return loss, sample_size, logging_output
 
-    def compute_loss(self, model, net_output, sample, reduce=True):
-        lprobs, target = get_lprobs_and_target(self.positions, self.padding_idx, model, net_output, sample)
+    def compute_loss(self, lprobs, target, reduce=True):
         loss = F.nll_loss(
             lprobs,
             target,
@@ -75,14 +79,18 @@ class DPPCrossEntropyCriterion(FairseqCriterion):
         )
         return loss, loss
 
-    def compute_accuracy(self, model, net_output, sample):
-        lprobs, target = get_lprobs_and_target(self.positions, self.padding_idx, model, net_output, sample)
+    def compute_accuracy(self, lprobs, target):
         mask = target.ne(self.padding_idx)
         n_correct = t.sum(
             lprobs.argmax(1).masked_select(mask).eq(target.masked_select(mask))
         )
         total = t.sum(mask)
         return n_correct, total
+
+    def compute_mean_absolute_difference(self, lprobs, target):
+        mask = target.ne(self.padding_idx)
+        abs_diff_sum = (target.masked_select(mask) - lprobs.argmax(1).masked_select(mask)).abs().sum()
+        return abs_diff_sum
 
 
     @staticmethod
@@ -119,6 +127,18 @@ class DPPCrossEntropyCriterion(FairseqCriterion):
                 "accuracy",
                 lambda meters: round(
                     meters["n_correct"].sum * 100.0 / meters["total"].sum, 3
+                )
+                if meters["total"].sum > 0
+                else float("nan"),
+            )
+            abs_diff_sum = utils.item(
+                sum(log.get("abs_diff_sum", 0) for log in logging_outputs)
+            )
+            metrics.log_scalar("abs_diff_sum", abs_diff_sum)
+            metrics.log_derived(
+                "mad",
+                lambda meters: round(
+                    meters["abs_diff_sum"].sum / meters["total"].sum, 3
                 )
                 if meters["total"].sum > 0
                 else float("nan"),
