@@ -10,7 +10,7 @@ if __name__ == '__main__':
     conda_env = "npe"
 
     #experiment = "dpp-learned-baevski-wiki103-" + namegenerator.gen(n=2)
-    experiment = "dpp-npe-baevski-wiki103-64-" + namegenerator.gen(n=2) #+"-prob-layer-idx-0"
+    experiment = "dpp-alibi-baevski-wiki103-512-mad-" + namegenerator.gen(n=2) #+"-prob-layer-idx-0"
     #experiment = "lm-learned-baevski-wiki103-512"
     # experiment = "lm-" + namegenerator.gen(n=2) + "-gpt_xl-pile-alibi-1024-bm-a100-btz8"
 
@@ -26,7 +26,7 @@ if __name__ == '__main__':
     hyperparams = {
         'no-token-positional-embeddings': [True],
         #'no-token-positional-embeddings': [False],
-        'tokens-per-sample': [64],
+        'tokens-per-sample': [512],
         #'tokens-per-sample': [128],
         #'arch': ['transformer_lm_gpt', 'transformer_lm_gpt_2', 'transformer_lm_gpt_4', 'transformer_lm_gpt_6']
         #'arch': ['transformer_lm_gpt_xl'],
@@ -35,7 +35,7 @@ if __name__ == '__main__':
         #'arch': ['transformer_lm_wiki103'],
         #'probe-layer-idx': [0],
         'probe-layer-idx': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
-        'lr': [0.0002],
+        'lr': [0.002,0.0002],
         #'dropout': [0, 0.1, 0.2, 0.3],
         'non-linear-probe': [True]
 
@@ -58,6 +58,9 @@ if __name__ == '__main__':
             hyperparams['no-token-positional-embeddings'] = [True]
         elif "sinusoidal" in experiment:
             pp_model_path = "/home/olab/adi/experiments/e3po/vanilla-e3po-baseline-8gpu-distribution-anybody/vanilla-e3po-baseline-8gpu-distribution-anybody/checkpoint_best.pt"
+            hyperparams['no-token-positional-embeddings'] = [False]
+        elif "alibi" in experiment:
+            pp_model_path = "/home/olab/adi/experiments/e3po/alibi-e3po-baseline-influence-gap/alibi-e3po-baseline-influence-gap/checkpoint_best.pt"
             hyperparams['no-token-positional-embeddings'] = [False]
 
 
