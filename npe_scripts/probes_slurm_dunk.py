@@ -167,8 +167,8 @@ def create_scripts(all_f, experiment_name, pos_method, hyperparams, python_comma
     for dict_ in param_grid:
         job_command = python_command_template_params
         job_file_path = os.path.join(slurm_output_dir, experiment_name+"-"+pos_method)
-        slurm_command = slurm_template + experiment_name +"-"+pos_method
-        full_save_dir = save_dir
+        slurm_command = slurm_template + experiment_name + "-" + pos_method
+        full_save_dir = save_dir + "-" + pos_method
 
         slurm_out_file = "slurm_" + experiment_name
         slurm_command = slurm_command.replace(slurm_out_file, slurm_out_file + "-" + pos_method)
