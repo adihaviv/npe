@@ -26,10 +26,13 @@ def get_parameter_value(parameters_str, key):
 
 
 def get_experiment_params(lines):
-    first_line = lines[0]
-    first_line_prefix = first_line.find("fairseq_cli.train |")
-    parameters_str = first_line[first_line_prefix + len("fairseq_cli.train |"):]
-    return parameters_str
+    for line in lines:
+        first_line_prefix = line.find("fairseq_cli.train |")
+        if first_line_prefix == -1:
+            continue
+        parameters_str = line[first_line_prefix + len("fairseq_cli.train |"):]
+        return parameters_str
+    raise Exception("Could not find experiment params")
 
 
 def get_validation_value(key, validation_parts):
