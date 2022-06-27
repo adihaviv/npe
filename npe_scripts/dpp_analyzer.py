@@ -18,10 +18,11 @@ def get_pe_from_name(path):
         raise Exception("file name should include npe, alibi, learned or sinusoidal.\n{}".format(path))
 
 
-def get_parameter_value(parameters_str, key):
+def get_parameter_value(parameters_str, key, is_bool=False):
     key = "'"+key+"':"
     a = parameters_str[parameters_str.find(key) + len(key):]
-    return a[:a.find(",")]
+    end_idx = a.find(",") if not is_bool else a.find("}")
+    return a[:end_idx].strip()
 
 
 def get_experiment_params(lines):
@@ -38,7 +39,7 @@ def get_validation_value(key, validation_parts):
     for part in validation_parts:
         if key in part:
             return part.replace(key, "").strip()
-    raise Exception("{} not found in validation stats:{}.".format(key, validation_parts))
+    return ("{} not found in validation stats:{}.".format(key, validation_parts))
 
 
 def get_last_validation_data(lines):
@@ -67,7 +68,7 @@ def get_stats(path):
     res_files = [os.path.join(path, f) for f in tqdm(os.listdir(path)) if f.endswith(".out")]
 
     with open(os.path.join(path, "stats_last.txt"), "w") as out_fl:
-        out_fl.write("Experiment\tLayer\tMAD\tAccuracy\tPPL\n")
+        out_fl.write("Experiment\tLayer\tLR\tProbe Model\tMAD\tAccuracy\tPPL\n")
         for file in tqdm(res_files):
             pe = get_pe_from_name(os.path.basename(file))
             with open(file, "r", encoding="latin-1") as in_f:
@@ -75,12 +76,14 @@ def get_stats(path):
                 parameters_str = get_experiment_params(lines)
                 #parameters = json.load(parameters_str)
                 layer_id = get_parameter_value(parameters_str, "probe_layer_idx")
+                lr = get_parameter_value(parameters_str, "lr")[2:-1]
+                non_linear = "linear" if get_parameter_value(parameters_str, "non_linear_probe", is_bool=True) == 'False' else "non-linear"
 
                 last_validation_stats = get_last_validation_data(lines).split("|")
                 ppl = get_validation_value("ppl", last_validation_stats)
                 acc = get_validation_value("accuracy", last_validation_stats)
                 mad = get_validation_value("mad", last_validation_stats)
-                out_fl.write("{}\t{}\t{}\t{}\t{}\n".format(pe, layer_id, mad, acc, ppl))
+                out_fl.write("{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format(pe, layer_id, lr, non_linear, mad, acc, ppl))
 
     if args.best_metric:
         with open(os.path.join(path, "stats_best.txt"), "w") as out_fb:
@@ -92,18 +95,20 @@ def get_stats(path):
                     parameters_str = get_experiment_params(lines)
                     #parameters = json.load(parameters_str)
                     layer_id = get_parameter_value(parameters_str, "probe_layer_idx")
+                    lr = get_parameter_value(parameters_str, "lr")[2:-1]
+                    non_linear = "non-linear" if bool(get_parameter_value(parameters_str, "non_linear_probe", is_bool=True)) else "linear"
 
                     best_validation_stats = get_best_validation_data(args.best_metric, lines).split("|")
                     ppl = get_validation_value("ppl", best_validation_stats)
                     acc = get_validation_value("accuracy", best_validation_stats)
                     mad = get_validation_value("mad", best_validation_stats)
-                    out_fb.write("{}\t{}\t{}\t{}\t{}\n".format(pe, layer_id, mad, acc, ppl))
+                    out_fb.write("{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format(pe, layer_id, lr, non_linear, mad, acc, ppl))
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--dir",
-                        default=r"/home/olab/adi/experiments/npe/slurm_scripts/dpp-alibi-baevski-wiki103-512-mad-advertising-print",
+                        default=r"/home/olab/adi/experiments/npe/slurm_scripts/pile-probes/slurm_scripts/dpp-pile-charity-charge",
                         type=str,
                         required=False)
 

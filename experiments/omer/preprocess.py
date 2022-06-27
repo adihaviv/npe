@@ -24,7 +24,7 @@ def main(input_path, output_path, num_workers):
     
 def read_paragraphs(path):
     with open(path) as fin:
-        lines = [line.strip() for line in tqdm(fin)]
+        lines = [line.strip() for line in tqdm(fin) if len(line.strip()) > 7]
     return lines
 
 

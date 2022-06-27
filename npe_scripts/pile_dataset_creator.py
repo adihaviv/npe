@@ -80,12 +80,7 @@ run pile_dataset_creator.py
 
 
 (6) Preprocess datasets with the created dictionary
-fairseq-preprocess --only-source 
---trainpref /home/olab/adi/git/npe/data-bin/pile/pile_00_01_wikipedia.train.tokens 
---validpref /home/olab/adi/git/npe/data-bin/pile/pile_00_01_wikipedia.valid.tokens 
---testpref /home/olab/adi/git/npe/data-bin/pile/pile_00_01_wikipedia.test.tokens 
---destdir /home/olab/adi/git/npe/data-bin/pile --workers 20 
---srcdict /home/olab/adi/git/npe/data-bin/pile/dict.txt --fp16
+fairseq-preprocess --only-source --trainpref /home/olab/adi/git/npe/data-bin/pile/pile-tokenized/pile_00_01_wikipedia.train.tokens.bpe --validpref /home/olab/adi/git/npe/data-bin/pile/pile-tokenized/pile_00_01_wikipedia.valid.tokens.bpe --testpref /home/olab/adi/git/npe/data-bin/pile/pile-tokenized/pile_00_01_wikipedia.test.tokens.bpe --destdir /home/olab/adi/git/npe/data-bin/pile/pile-fixed --workers 20  --srcdict /home/olab/adi/git/npe/data-bin/pile/pile-fixed/dict.txt --fp16
 
 """
 
@@ -95,16 +90,22 @@ DEBUG = False
 def read_pile(pile_paths, filters):
     examples = []
     log_counter = 0
+    yt_counter = 0
     for pile_path in pile_paths:
         with open(pile_path) as f:
             for line in f:
                 example = json.loads(line)
                 assert len(example['meta']) == 1
                 meta = example['meta']['pile_set_name'].lower()
+                #print(meta)
+                if meta == "youtube":
+                  yt_counter += 1
+                  print("found one")
                 if meta not in filters:
                     examples.append(example['text'])
                 log_counter += 1
                 if log_counter % 10000 == 0:
+                    print("filtered {} youtube examples".format(yt_counter))
                     print("processed {} examples".format(log_counter))
 
                 if DEBUG and log_counter > 12345:
@@ -123,11 +124,11 @@ def parse_args():
                         type=str,
                         required=False)
     parser.add_argument("--filters",
-                        default="github,stackexchange",
+                        default="github,youtube",
                         type=str,
                         required=False)
     parser.add_argument("--out_dir",
-                        default="/home/olab/adi/git/npe/data-bin/pile",
+                        default="/home/olab/adi/git/npe/data-bin/pile_no_youtube",
                         type=str,
                         required=False)
 
@@ -145,7 +146,7 @@ def write_filterd_file(dataset, out_dir, dataset_type):
     out_file_path = os.path.join(out_dir, pile_prefix + '.'+dataset_type+'.tokens')
     with open(out_file_path, 'w') as f:
         for item in dataset:
-            f.write("%s\n\n=======\n\n" % item)
+            f.write("%s\n" % item)
             counter -= 1
             if counter % 10000 == 0 and counter > 0:
                 print("wrote {} examples in test set".format(counter))
@@ -183,7 +184,3 @@ if __name__ == '__main__':
           f"fairseq-preprocess --only-source --trainpref {train_file_path} --validpref {valid_file_path} "
           f"--testpref {test_file_path} --destdir {args.out_dir} --workers 20 --srcdict {args.out_dir}/dict.txt"
           f"--bpe gpt2 --fp16")
-
-
-
-

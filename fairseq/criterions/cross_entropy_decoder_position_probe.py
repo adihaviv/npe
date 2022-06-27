@@ -5,6 +5,7 @@
 
 import math
 from dataclasses import dataclass
+import random
 
 import torch.nn.functional as F
 from fairseq import metrics, utils
@@ -42,7 +43,22 @@ class DPPCrossEntropyCriterion(FairseqCriterion):
         3) logging outputs to display while training
         """
 
+        #if False:
+        # all tokens are the same probe
+        #input_number = random.randint(0,sample["net_input"]['src_tokens'].max().item())
+        #print("input:", input_number)
+        #sample["net_input"]['src_tokens'] = t.zeros_like(sample["net_input"]['src_tokens']) + input_number
+        if False:
+            hack = t.zeros_like(sample["net_input"]['src_tokens'])
+            i = 0
+            while 2*i+1 < len(sample["net_input"]['src_tokens'][0]):
+                hack[0][2*i] = sample["net_input"]['src_tokens'][0][i]
+                hack[0][2*i + 1] = sample["net_input"]['src_tokens'][0][i]
+                i += 1
+            sample["net_input"]['src_tokens'] = hack
+
         net_output = model(**sample["net_input"])
+
         lprobs, target = get_lprobs_and_target(self.positions, self.padding_idx, model, net_output, sample)
 
         loss, _ = self.compute_loss(lprobs, target, reduce=reduce)
@@ -63,11 +79,11 @@ class DPPCrossEntropyCriterion(FairseqCriterion):
             abs_diff_sum = self.compute_mean_absolute_difference(lprobs, target)
             logging_output["abs_diff_sum"] = utils.item(abs_diff_sum.data)
 
-            # Print out some examples:
-            #lprobs, target = get_lprobs_and_target(self.positions, self.padding_idx, model, net_output, sample)
-            #outputs = [[j.item()-5 for j in [i.data for i in lprobs.view(net_output[0].shape).argmax(2)][k]] for k in range(5)]
-            #for output in outputs:
-            #    print(output)
+        # Print out some examples:
+        #lprobs, target = get_lprobs_and_target(self.positions, self.padding_idx, model, net_output, sample)
+        #outputs = [[j.item()-5 for j in [i.data for i in lprobs.view(net_output[0].shape).argmax(2)][k]] for k in range(net_output[0].shape[0])]
+        #for output in outputs:
+        #    print("O: ", output)
         return loss, sample_size, logging_output
 
     def compute_loss(self, lprobs, target, reduce=True):
@@ -84,8 +100,25 @@ class DPPCrossEntropyCriterion(FairseqCriterion):
         n_correct = t.sum(
             lprobs.argmax(1).masked_select(mask).eq(target.masked_select(mask))
         )
+        #print(lprobs.argmax(1).masked_select(mask))
         total = t.sum(mask)
         return n_correct, total
+
+    def two_bos_hack(sample):
+        hack = t.zeros_like(sample["net_input"]['src_tokens'])
+        hack[0][0] = sample["net_input"]['src_tokens'][0][0]
+        hack[0][1] = sample["net_input"]['src_tokens'][0][0]
+        hack[0][2] = sample["net_input"]['src_tokens'][0][0]
+        hack[0][3:] = sample["net_input"]['src_tokens'][0][2:-1]
+
+        return hack
+
+    def all_double_bos_hack(sample):
+        hack = t.zeros_like(sample["net_input"]['src_tokens'])
+        for i in range(round(len(sample["net_input"]['src_tokens'][0])/2)):
+            hack[0][i] = sample["net_input"]['src_tokens'][0][i]
+            hack[0][i+1] = sample["net_input"]['src_tokens'][0][i]
+        return hack
 
     def compute_mean_absolute_difference(self, lprobs, target):
         mask = target.ne(self.padding_idx)

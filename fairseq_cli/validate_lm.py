@@ -171,38 +171,7 @@ def main(cfg: FairseqConfig) -> None:
         import torch_xla.core.xla_model as xm
 
         xm.rendezvous("load_checkpoint")  # wait for all workers
-
-    max_epoch = cfg.optimization.max_epoch or math.inf
-    lr = trainer.get_lr()
-
-    train_meter = meters.StopwatchMeter()
-    train_meter.start()
-    while epoch_itr.next_epoch_idx <= max_epoch:
-        if lr <= cfg.optimization.stop_min_lr:
-            logger.info(
-                f"stopping training because current learning rate ({lr}) is smaller "
-                "than or equal to minimum learning rate "
-                f"(--stop-min-lr={cfg.optimization.stop_min_lr})"
-            )
-            break
-
-        # train for one epoch
-        valid_losses, should_stop = train(cfg, trainer, task, epoch_itr)
-        if should_stop:
-            break
-
-        # only use first validation loss to update the learning rate
-        lr = trainer.lr_step(epoch_itr.epoch, valid_losses[0])
-
-        epoch_itr = trainer.get_train_iterator(
-            epoch_itr.next_epoch_idx,
-            # sharded data: get train iterator for next epoch
-            load_dataset=task.has_sharded_data("train"),
-            # don't cache epoch iterators for sharded datasets
-            disable_iterator_cache=task.has_sharded_data("train"),
-        )
-    train_meter.stop()
-    logger.info("done training in {:.1f} seconds".format(train_meter.sum))
+    valid_losses, should_stop = train(cfg, trainer, task, epoch_itr)
 
     # ioPath implementation to wait for all asynchronous file writes to complete.
     if cfg.checkpoint.write_checkpoints_asynchronously:
@@ -252,6 +221,7 @@ def train(
         fix_batches_to_gpus=cfg.distributed_training.fix_batches_to_gpus,
         shuffle=(epoch_itr.next_epoch_idx > cfg.dataset.curriculum),
     )
+
     update_freq = (
         cfg.optimization.update_freq[epoch_itr.epoch - 1]
         if epoch_itr.epoch <= len(cfg.optimization.update_freq)
@@ -292,42 +262,10 @@ def train(
     )
     progress.update_config(_flatten_config(cfg))
 
-    trainer.begin_epoch(epoch_itr.epoch)
-
     valid_subsets = cfg.dataset.valid_subset.split(",")
-    should_stop = False
-    num_updates = trainer.get_num_updates()
-    logger.info("Start iterating over samples")
-    for i, samples in enumerate(progress):
-        with metrics.aggregate("train_inner"), torch.autograd.profiler.record_function(
-            "train_step-%d" % i
-        ):
-            log_output = None#trainer.train_step(samples)
-
-        if log_output is not None:  # not OOM, overflow, ...
-            # log mid-epoch stats
-            num_updates = trainer.get_num_updates()
-            if num_updates % cfg.common.log_interval == 0:
-                stats = get_training_stats(metrics.get_smoothed_values("train_inner"))
-                progress.log(stats, tag="train_inner", step=num_updates)
-
-                # reset mid-epoch stats after each log interval
-                # the end-of-epoch stats will still be preserved
-                metrics.reset_meters("train_inner")
-
-        end_of_epoch = not itr.has_next()
-
-        valid_losses, should_stop = validate_and_save(
-            cfg, trainer, task, epoch_itr, valid_subsets, end_of_epoch
-        )
-
-    # log end-of-epoch stats
-    logger.info("end of epoch {} (average epoch stats below)".format(epoch_itr.epoch))
-    stats = get_training_stats(metrics.get_smoothed_values("train"))
-    progress.print(stats, tag="train", step=num_updates)
-
-    # reset epoch-level meters
-    metrics.reset_meters("train")
+    valid_losses, should_stop = validate_and_save(
+        cfg, trainer, task, epoch_itr, valid_subsets, end_of_epoch=True
+    )
     return valid_losses, should_stop
 
 
@@ -377,40 +315,8 @@ def validate_and_save(
             f"stop_time_hours: {cfg.optimization.stop_time_hours} hour(s)"
         )
 
-    do_save = (end_of_epoch and epoch_itr.epoch % cfg.checkpoint.save_interval == 0) or should_stop or \
-              (cfg.checkpoint.save_interval_updates > 0
-                    and num_updates > 0
-                    and num_updates % cfg.checkpoint.save_interval_updates == 0
-                    and num_updates >= cfg.dataset.validate_after_updates
-                )
-
-    do_validate = (
-        (
-            (not end_of_epoch and do_save)  # validate during mid-epoch saves
-            or (end_of_epoch and epoch_itr.epoch % cfg.dataset.validate_interval == 0)
-            or should_stop
-            or (
-                cfg.dataset.validate_interval_updates > 0
-                and num_updates > 0
-                and num_updates % cfg.dataset.validate_interval_updates == 0
-            )
-        )
-        and not cfg.dataset.disable_validation
-        and num_updates >= cfg.dataset.validate_after_updates
-    )
-
-    # Validate
-    valid_losses = [None]
-    if do_validate:
-        valid_losses = validate(cfg, trainer, task, epoch_itr, valid_subsets)
-
+    valid_losses = validate(cfg, trainer, task, epoch_itr, valid_subsets)
     should_stop |= should_stop_early(cfg, valid_losses[0])
-
-    # Save checkpoint
-    if do_save or should_stop:
-        checkpoint_utils.save_checkpoint(
-            cfg.checkpoint, trainer, epoch_itr, valid_losses[0]
-        )
 
     return valid_losses, should_stop
 

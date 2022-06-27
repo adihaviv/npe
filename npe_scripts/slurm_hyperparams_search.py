@@ -10,7 +10,7 @@ if __name__ == '__main__':
     conda_env = "npe"
 
     #experiment = "dpp-learned-baevski-wiki103-" + namegenerator.gen(n=2)
-    experiment = "dpp-alibi-baevski-wiki103-512-mad-" + namegenerator.gen(n=2) #+"-prob-layer-idx-0"
+    experiment = "dpp-sinusoidal-baevski-wiki103-512-mad-" + namegenerator.gen(n=2) #+"-prob-layer-idx-0"
     #experiment = "lm-learned-baevski-wiki103-512"
     # experiment = "lm-" + namegenerator.gen(n=2) + "-gpt_xl-pile-alibi-1024-bm-a100-btz8"
 
@@ -35,7 +35,7 @@ if __name__ == '__main__':
         #'arch': ['transformer_lm_wiki103'],
         #'probe-layer-idx': [0],
         'probe-layer-idx': [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
-        'lr': [0.002,0.0002],
+        'lr': [0.002],
         #'dropout': [0, 0.1, 0.2, 0.3],
         'non-linear-probe': [True]
 

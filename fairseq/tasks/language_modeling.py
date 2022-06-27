@@ -93,6 +93,7 @@ class LanguageModelingConfig(FairseqDataclass):
         metadata={"help": "boolean to pad to fixed batch size"},
     )
 
+
     # TODO common vars below add to parent
     seed: int = II("common.seed")
     batch_size: Optional[int] = II("dataset.batch_size")
